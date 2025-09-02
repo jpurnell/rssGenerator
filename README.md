@@ -26,7 +26,7 @@ The workaround for the above issues is to manually upload the episodes.
 
 ### Prerequisites
 
-- Swift 5.9 or higher
+- Swift 6.1 or higher
 - brew
 - ffmpeg
 
