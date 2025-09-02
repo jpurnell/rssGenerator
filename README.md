@@ -182,116 +182,115 @@ $ ffmpeg -i input.mp4 \
     -movflags faststart \
     output.mp4
 ```
+<>
+<>## Usage with GitHub Actions
+<>
+<>To incorporate this action into your workflow, follow these steps:
+<>
+<>1. **Create a Workflow File**:
+<>   - In your repository, create a new file under `.github/workflows`, for example, `rss_workflow.yml`.
+<>
+<>2. **Set Up the Workflow**:
+<>   - Use the following configuration as a starting point:
+<>
+<>```yaml
+<>name: Generate Podcast RSS Feed
+<>
+<>on: [push, pull_request]
+<>
+<>env:
+<>  R2_BUCKET: 'foobar'
+<>jobs:
+<>  generate-rss:
+<>	runs-on: ubuntu-latest
+<>
+<>	steps:
+<>	  - name: Checkout repository
+<>		uses: actions/checkout@v2
+<>
+<>	  - name: Install yamllint
+<>		run: |
+<>		  sudo apt-get update
+<>		  sudo apt-get install yamllint
+<>
+<>	  - name: Lint YAML file
+<>		run: yamllint podcast_config.yaml
+<>
+<>	  - name: Run Podcast RSS Generator
+<>		uses: vpetersson/podcast-rss-generator@master
+<>		with:
+<>		  input_file: 'podcast_config.yaml'
+<>		  output_file: 'podcast_feed.xml'
+<>
+<>	  - name: Validate output with xq
+<>		run: |
+<>		  wget -q https:<>github.com/sibprogrammer/xq/releases/download/v1.2.3/xq_1.2.3_linux_amd64.tar.gz
+<>		  tar xfz xq_1.2.3_linux_amd64.tar.gz
+<>		  cat podcast_feed.xml | ./xq
+<>
+<>	  - uses: actions/upload-artifact@v2
+<>		with:
+<>		  name: podcast_feed.xml
+<>		  path: podcast_feed.xml
+<>
+<>  deploy:
+<>	runs-on: ubuntu-latest
+<>	needs: generate-rss
+<>	if: github.ref == 'refs/heads/master'
+<>	steps:
+<>	  - uses: actions/download-artifact@v2
+<>		with:
+<>		  name: podcast_feed.xml
+<>
+<>	  - name: Install mc
+<>		run: |
+<>		  wget -q https:<>dl.min.io/client/mc/release/linux-amd64/mc
+<>		  chmod +x mc
+<>
+<>	  - name: Set up mc
+<>		env:
+<>		  R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+<>		  R2_KEY_ID: ${{ secrets.R2_KEY_ID }}
+<>		  R2_KEY_SECRET: ${{ secrets.R2_KEY_SECRET }}
+<>		run: ./mc alias set r2-storage ${R2_ENDPOINT} ${R2_KEY_ID} ${R2_KEY_SECRET}
+<>
+<>	  - name: Copy file
+<>		run: ./mc cp podcast_feed.xml r2-storage/${R2_BUCKET}/
+<>```
+<>
+<>3. **Customize Your Workflow**:
+<>   - Adjust paths to the YAML configuration and the output XML files as per your repository structure.
+<>   - Ensure the `uses` field points to `vpetersson/podcast-rss-generator@master` (or specify a specific release tag/version instead of `master`).
+<>
+<>4. **Commit and Push Your Workflow**:
+<>   - Once you commit this workflow file to your repository, the action will be triggered based on the defined events (e.g., on push or pull request).
+<>
+<>## Usage with Docker
+<>Build the image with the following and tagging with `latest`:
+<>```
+<>docker build -t podcast-rss-generator:latest .
+<>```
+<>To spin up a container from the built image that uses a custom config file and writes out to `myfeed.xml`.
+<>
+<>```
+<>docker run --rm -v .:/opt podcast-rss-generator:latest --output-file /opt/myfeed.xml --input-file /opt/custom_podcast_config.yaml
+<>```
+<>
+<>N.B. The switches `-v` share files between host and container and `--rm` automatically removes the container when it exits.
+<>### Inputs
+<>
+<>- `input_file`: Path to the input YAML file. Default: `podcast_config.yaml`.
+<>- `output_file`: Path for the generated RSS feed XML file. Default: `podcast_feed.xml`.
+<>
+<>## Running Tests
+<>
+<>To run unit tests, use:
+<>
+<>```bash
+<>$ python -m unittest discover tests
+<>```
+<>
 
-/*
-## Usage with GitHub Actions
-
-To incorporate this action into your workflow, follow these steps:
-
-1. **Create a Workflow File**:
-   - In your repository, create a new file under `.github/workflows`, for example, `rss_workflow.yml`.
-
-2. **Set Up the Workflow**:
-   - Use the following configuration as a starting point:
-
-```yaml
-name: Generate Podcast RSS Feed
-
-on: [push, pull_request]
-
-env:
-  R2_BUCKET: 'foobar'
-jobs:
-  generate-rss:
-	runs-on: ubuntu-latest
-
-	steps:
-	  - name: Checkout repository
-		uses: actions/checkout@v2
-
-	  - name: Install yamllint
-		run: |
-		  sudo apt-get update
-		  sudo apt-get install yamllint
-
-	  - name: Lint YAML file
-		run: yamllint podcast_config.yaml
-
-	  - name: Run Podcast RSS Generator
-		uses: vpetersson/podcast-rss-generator@master
-		with:
-		  input_file: 'podcast_config.yaml'
-		  output_file: 'podcast_feed.xml'
-
-	  - name: Validate output with xq
-		run: |
-		  wget -q https://github.com/sibprogrammer/xq/releases/download/v1.2.3/xq_1.2.3_linux_amd64.tar.gz
-		  tar xfz xq_1.2.3_linux_amd64.tar.gz
-		  cat podcast_feed.xml | ./xq
-
-	  - uses: actions/upload-artifact@v2
-		with:
-		  name: podcast_feed.xml
-		  path: podcast_feed.xml
-
-  deploy:
-	runs-on: ubuntu-latest
-	needs: generate-rss
-	if: github.ref == 'refs/heads/master'
-	steps:
-	  - uses: actions/download-artifact@v2
-		with:
-		  name: podcast_feed.xml
-
-	  - name: Install mc
-		run: |
-		  wget -q https://dl.min.io/client/mc/release/linux-amd64/mc
-		  chmod +x mc
-
-	  - name: Set up mc
-		env:
-		  R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-		  R2_KEY_ID: ${{ secrets.R2_KEY_ID }}
-		  R2_KEY_SECRET: ${{ secrets.R2_KEY_SECRET }}
-		run: ./mc alias set r2-storage ${R2_ENDPOINT} ${R2_KEY_ID} ${R2_KEY_SECRET}
-
-	  - name: Copy file
-		run: ./mc cp podcast_feed.xml r2-storage/${R2_BUCKET}/
-```
-
-3. **Customize Your Workflow**:
-   - Adjust paths to the YAML configuration and the output XML files as per your repository structure.
-   - Ensure the `uses` field points to `vpetersson/podcast-rss-generator@master` (or specify a specific release tag/version instead of `master`).
-
-4. **Commit and Push Your Workflow**:
-   - Once you commit this workflow file to your repository, the action will be triggered based on the defined events (e.g., on push or pull request).
-
-## Usage with Docker
-Build the image with the following and tagging with `latest`:
-```
-docker build -t podcast-rss-generator:latest .
-```
-To spin up a container from the built image that uses a custom config file and writes out to `myfeed.xml`.
-
-```
-docker run --rm -v .:/opt podcast-rss-generator:latest --output-file /opt/myfeed.xml --input-file /opt/custom_podcast_config.yaml
-```
-
-N.B. The switches `-v` share files between host and container and `--rm` automatically removes the container when it exits.
-### Inputs
-
-- `input_file`: Path to the input YAML file. Default: `podcast_config.yaml`.
-- `output_file`: Path for the generated RSS feed XML file. Default: `podcast_feed.xml`.
-
-## Running Tests
-
-To run unit tests, use:
-
-```bash
-$ python -m unittest discover tests
-```
-
-*/
 
 ## Contributing
 
